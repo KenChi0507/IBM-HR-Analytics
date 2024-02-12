@@ -1,0 +1,422 @@
+---
+title: "Final_Project"
+author: "Kaile Jie, Yinyuan Zhou, KuanYu Chi"
+date: "2023-02-12"
+output: html_document
+---
+```{r setup ,message=FALSE, warning=FALSE, echo=TRUE}
+################################################################################
+############################# Include Library ##################################
+################################################################################
+library(rmarkdown)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(pandoc)
+library(leaps)
+library(car)
+library(RColorBrewer)
+library(kableExtra)
+library(corrplot)
+library(ggcorrplot)
+library(AICcmodavg)
+library(pROC)
+library(caret)
+library(glmnet)
+library(Metrics)
+library(gvlma)
+library(rcompanion)
+library(ggpubr)
+################################################################################
+############################### Read File ######################################
+################################################################################
+HR_Data_Ori = read_csv("HR-Employee-Attrition.csv")
+HR_Data_Num = read_csv("HR_attrition_orig_proc.csv")
+```
+
+```{r function, message=FALSE, warning=FALSE, echo=TRUE}
+################################################################################
+########################### Create Function ####################################
+################################################################################
+CAL_data = function(x){
+  mean_value = round(mean(x,na.rm=TRUE),3)
+  sd_value   = round(sd(x,na.rm=TRUE),3)
+  min_value = round(min(x,na.rm=TRUE),3)
+  median_value = round(median(x,na.rm=TRUE),3)
+  max_value = round(max(x,na.rm=TRUE),3)
+  range_value = max_value - min_value
+  
+  return_list=c(mean_value,sd_value,min_value,median_value,max_value,range_value) 
+  return(return_list)
+}
+CAL_outlier = function(x){
+  Q1 = quantile(x,0.25)
+  Q3 = quantile(x,0.75)
+  IQR= Q3-Q1 
+  Low_Out=Q1-IQR*1.5
+  High_Out=Q3+IQR*1.5
+  return_list=c(Low_Out,High_Out)
+  return(return_list)
+}
+```
+
+```{r EDA, message=FALSE, warning=FALSE, echo=TRUE}
+################################################################################
+############################## HR Data EDA #####################################
+################################################################################
+AT_Ori = HR_Data_Ori$Attrition
+BT_Ori = HR_Data_Ori$BusinessTravel
+DP_Ori = HR_Data_Ori$Department
+GD_Ori = HR_Data_Ori$Gender
+EF_Ori = HR_Data_Ori$EducationField
+OT_Ori = HR_Data_Ori$OverTime
+
+AG_Num = HR_Data_Ori$Age
+AT_Num = HR_Data_Num$Attrition
+BT_Num = HR_Data_Num$BusinessTravel
+DP_Num = HR_Data_Num$Department
+DH_Num = HR_Data_Num$DistanceFromHome
+GD_Num = HR_Data_Num$Gender
+EF_Num = HR_Data_Num$EducationField
+WY_Num = HR_Data_Num$TotalWorkingYears
+ES_Num = HR_Data_Num$EnvironmentSatisfaction
+JL_Num = HR_Data_Num$JobLevel
+JS_Num = HR_Data_Num$JobSatisfaction
+MI_Num = HR_Data_Num$MonthlyIncome
+OT_Num = HR_Data_Num$OverTime
+WB_Num = HR_Data_Num$WorkLifeBalance
+YC_Num = HR_Data_Num$YearsAtCompany
+
+str(HR_Data_Num)
+str(HR_Data_Ori)
+summary(HR_Data_Num)
+summary(HR_Data_Ori)
+is.null(HR_Data_Num)
+is.null(HR_Data_Ori)
+
+################################################################################
+################################################################################
+plot(MI_Num,AT_Num,col = "red",main = "Monthly Income_Attrition",xlab = "Monthly Income ($)",ylab = "Attrition")
+abline(lm(AT_Num~MI_Num))
+Hist_MI = hist(MI_Num,plot=F)
+Hist_MI$density = round((Hist_MI$counts/sum(Hist_MI$counts))*100,2)
+plot(Hist_MI, freq = FALSE,breaks = 10,main="Monthly Income",xlab="Monthly Income ($)",ylab = "Density (%)",las =1,labels=T,
+      col=brewer.pal(12,"Set3"),ylim = c(0,50),xlim = c(0,25000))
+hist(MI_Num, breaks = 10,main="Monthly Income",xlab="Monthly Income ($)",las =1,labels=T,
+     col=brewer.pal(12,"Set3"),ylim = c(0,700),xlim = c(0,25000))
+
+plot(DH_Num,AT_Num,col="red",main="Distance From Home_Attrition",xlab = "Distance From Home (miles)",ylab = "Attrition")
+abline(lm(AT_Num~DH_Num))
+Hist_DH = hist(DH_Num,plot=F)
+Hist_DH$density = round((Hist_DH$counts/sum(Hist_DH$counts))*100,2)
+plot(Hist_DH, freq = FALSE,breaks = 10,main="Distance From Home",xlab="Distance From Home (miles)",ylab = "Density (%)",las =1,labels=T,
+      col=brewer.pal(12,"Set3"),ylim = c(0,50),xlim = c(0,35))
+hist(DH_Num, breaks = 10,main="Distance From Home",xlab="Distance From Home (miles)",las =1,labels=T,
+     col=brewer.pal(12,"Set3"),ylim = c(0,500),xlim = c(0,35))
+
+plot(AG_Num,AT_Num,col="red",main="Age_Attrition",xlab = "Age (years old)",ylab = "Attrition")
+abline(lm(AT_Num~AG_Num))
+Hist_AG = hist(AG_Num,plot=F)
+Hist_AG$density = round((Hist_AG$counts/sum(Hist_AG$counts))*100,2)
+plot(Hist_AG, freq = FALSE,breaks = 10,main="Age",xlab="Age (years old)",ylab = "Density (%)",las =1,labels=T,
+      col=brewer.pal(12,"Set3"),ylim = c(0,50),xlim = c(10,70))
+hist(AG_Num, breaks = 10,main="Age",xlab="Age (years old)",las =1,labels=T,
+     col=brewer.pal(12,"Set3"),ylim = c(0,400),xlim = c(10,70))
+
+plot(WY_Num,AT_Num,col="red",main="Total Working Years_Attrition",xlab = "Total Working Years (years)",ylab = "Attrition")
+abline(lm(AT_Num~WY_Num))
+Hist_WY = hist(WY_Num,plot=F)
+Hist_WY$density = round((Hist_WY$counts/sum(Hist_WY$counts))*100,2)
+plot(Hist_WY, freq = FALSE,breaks = 10,main="Total Working Years",xlab="Total Working Years (years)",ylab = "Density (%)",las =1,labels=T,
+      col=brewer.pal(12,"Set3"),ylim = c(0,50),xlim = c(0,50))
+hist(WY_Num, breaks = 10,main="Total Working Years",xlab="Total Working Years (years)",las =1,labels=T,
+     col=brewer.pal(12,"Set3"),ylim = c(0,700),xlim = c(0,50))
+
+################################################################################
+################################################################################
+G_A_Table=table(GD_Ori,AT_Ori)
+Male_Rate_1=round((G_A_Table[2,1]/1233)*100,2)
+Male_Rate_2=round((G_A_Table[2,2]/237)*100,2)
+FeMale_Rate_1=round((G_A_Table[1,1]/1233)*100,2)
+FeMale_Rate_2=round((G_A_Table[1,2]/237)*100,2)
+G_A_bar=barplot(G_A_Table,main="Gender_Attrition",xlab="Attrition",
+               horiz = F,ylim=c(0,1500),ylab="Numbers",las=1,cex.names = 0.8,
+               col=c("Female"="pink","Male"="skyblue"),beside=F, position ="dodge")
+text(G_A_bar,G_A_Table,c(Male_Rate_1,Male_Rate_2,FeMale_Rate_1,FeMale_Rate_2),cex = 0.8,pos = c(3,4))
+legend("topright",legend = paste(unique(sort(GD_Ori)), ""),
+        cex=0.8,title="Gender", text.font=2, bg='lightblue',fill = c("Female"="pink","Male"="skyblue")) 
+
+################################################################################
+################################################################################
+Attrition_Table = table(AT_Ori)
+BusinessTravel_Table = table(BT_Ori)
+Department_Table = table(DP_Ori)
+Gender_Table = table(GD_Ori)
+
+pie(Attrition_Table,labels=Attrition_Table,main = "Attrition Status",radius = 0.8,
+    lty=1, cex=1, font=2, col = c("white","red"))
+legend("bottomright",legend = paste(unique(sort(AT_Ori))),cex=0.7,title="Attrition Status",
+       text.font=2, bg='lightblue',fill = c("white","red"))
+
+pie(Gender_Table,labels=Gender_Table,main = "Gender ",radius = 0.8,
+    lty=1, cex=1, font=2, col = c("pink","skyblue"))
+legend("bottomright",legend = paste(unique(sort(GD_Ori))),cex=0.7,title="Gender",
+       text.font=2, bg='lightblue',fill = c("pink","skyblue"))
+
+pie(BusinessTravel_Table,labels=BusinessTravel_Table,main = "Business Travel ",radius = 0.8,
+    lty=1, cex=1, font=2, col = brewer.pal(3,"Set3"))
+legend("bottomright",legend = paste(unique(sort(BT_Ori))),cex=0.78,title="Business Travel",
+       text.font=2, bg='lightblue',fill = brewer.pal(3,"Set3"))
+
+pie(Department_Table,labels=Department_Table,main = "Department",radius = 0.8,
+    lty=1, cex=1, font=2, col = terrain.colors(3))
+legend("bottomright",legend = paste(unique(sort(DP_Ori))),cex=0.7,title="Department",
+       text.font=2, bg='lightblue',fill = terrain.colors(3))
+################################################################################
+################################################################################
+EducationField_Table=table(EF_Ori,AT_Ori)
+EducationField_bar=barplot(EducationField_Table,main="Education Field_Attrition",ylab="Attrition",
+               horiz = T,xlim=c(0,600),xlab="Numbers",las=1,cex.names = 0.8,
+               col=terrain.colors(6),beside=T)
+text(EducationField_Table,EducationField_bar,EducationField_Table,cex = 0.8, pos = 4)
+legend("topright",legend = paste(unique(sort(EF_Ori)), ""),
+        cex=0.8,title="Education Field", text.font=2, bg='lightblue',fill = terrain.colors(6))
+
+Department_Table=table(DP_Ori,AT_Ori)
+Department_bar=barplot(Department_Table,main="Department_Attrition",ylab="Attrition",
+               horiz = T,xlim=c(0,1000),xlab="Numbers",las=1,cex.names = 0.8,
+               col=terrain.colors(3),beside=T)
+text(Department_Table,Department_bar,Department_Table,cex = 0.8, pos = 4)
+legend("topright",legend = paste(unique(sort(DP_Ori)), ""),
+        cex=0.8,title="Department", text.font=2, bg='lightblue',fill = terrain.colors(3))
+
+EnvironmentSatisfaction_Table=table(ES_Num,AT_Ori)
+EnvironmentSatisfaction_bar=barplot(EnvironmentSatisfaction_Table,main="Environment Satisfaction_Attrition",ylab="Attrition",
+               horiz = T,xlim=c(0,500),xlab="Numbers",las=1,cex.names = 0.8,
+               col=terrain.colors(4),beside=T)
+text(EnvironmentSatisfaction_Table,EnvironmentSatisfaction_bar,EnvironmentSatisfaction_Table,cex = 0.8, pos = 4)
+legend("topright",legend = paste(unique(sort(ES_Num)), ""),
+        cex=0.8,title="Environment Satisfaction", text.font=2, bg='lightblue',fill = terrain.colors(4))
+
+JobLevel_Table=table(JL_Num,AT_Ori)
+JobLevel_bar=barplot(JobLevel_Table,main="Job Level_Attrition",ylab="Attrition",
+               horiz = T,xlim=c(0,600),xlab="Numbers",las=1,cex.names = 0.8,
+               col=terrain.colors(5),beside=T)
+text(JobLevel_Table,JobLevel_bar,JobLevel_Table,cex = 0.8, pos = 4)
+legend("topright",legend = paste(unique(sort(JL_Num)), ""),
+        cex=0.8,title="Job Level", text.font=2, bg='lightblue',fill = terrain.colors(5))
+################################################################################
+################################################################################
+HRD_Category=data.frame(HR_Data_Num$Attrition,HR_Data_Num$BusinessTravel,HR_Data_Num$Department,HR_Data_Num$Education,HR_Data_Num$EducationField,HR_Data_Num$EnvironmentSatisfaction,HR_Data_Num$Gender,HR_Data_Num$JobLevel,HR_Data_Num$JobInvolvement,HR_Data_Num$JobRole,HR_Data_Num$JobSatisfaction,HR_Data_Num$MaritalStatus,HR_Data_Num$OverTime,HR_Data_Num$PerformanceRating,HR_Data_Num$RelationshipSatisfaction,HR_Data_Num$StockOptionLevel,HR_Data_Num$WorkLifeBalance)
+
+HRD_Numeric=data.frame(HR_Data_Num$Attrition,HR_Data_Num$Age,HR_Data_Num$DistanceFromHome,HR_Data_Num$HourlyRate,HR_Data_Num$NumCompaniesWorked,HR_Data_Num$MonthlyIncome,HR_Data_Num$MonthlyRate,HR_Data_Num$TotalWorkingYears,HR_Data_Num$YearsAtCompany,HR_Data_Num$YearsInCurrentRole,HR_Data_Num$YearsSinceLastPromotion,HR_Data_Num$YearsWithCurrManager)
+
+corrplot(cor(HRD_Category),method="number",number.cex = 0.45,tl.cex=0.5,addn=T,
+         addgrid.col = "gray50", assign.col="min2max",
+         tl.col = "black", cl.ratio=0.4, addcolor="no",
+         col = colorRampPalette(c("yellow","green","blue"))(100))
+
+corrplot(cor(HRD_Numeric),method="number",number.cex = 0.45,tl.cex=0.5,addn=T,
+         addgrid.col = "gray50", assign.col="min2max",
+         tl.col = "black", cl.ratio=0.4, addcolor="no",
+         col = colorRampPalette(c("yellow","green","blue"))(100))
+```
+
+```{r ANOVA Test 1, message=FALSE, warning=FALSE, echo=TRUE}
+# Two-way ANOVA test
+# Q: Is there a significant difference in mean monthly income among different education background?
+
+## convert the variables Education to R factors.
+
+HR_Data_Num$Attrition <- as.factor(HR_Data_Num$Attrition)
+HR_Data_Num$Education <- as.factor(HR_Data_Num$Education)
+HR_Data_Num$JobLevel <- as.factor(HR_Data_Num$JobLevel)
+
+## summary statistics
+### compute the mean and the standard deviation of response variable by group
+HR_Data_Num%>%
+  group_by(Education)%>%
+  get_summary_stats(MonthlyIncome,type = "mean_sd")
+
+HR_Data_Num%>%
+  group_by(JobLevel)%>%
+  get_summary_stats(MonthlyIncome,type = "mean_sd")
+## visualization
+### create a box plot
+ggboxplot(HR_Data_Num, x = "Education", y = "MonthlyIncome", color = "JobLevel")
+
+## check normality assumption by analyzing the datamodel residuals
+### QQ plot and Shapiro-Wilk test of normality are used
+
+## fit data into linear datamodel
+datamodel <- lm(MonthlyIncome ~ Education*JobLevel, data = HR_Data_Num)
+
+## create a QQ plot of residuals
+ggqqplot(residuals(datamodel))
+
+## compute Shapiro-Wilk test of normility
+shapiro.test(residuals(datamodel))
+
+## homogeneity of variance asssumption
+leveneTest(MonthlyIncome ~ Education*JobLevel,data = HR_Data_Num)
+
+## test for ANOVA assumptions
+fit = lm(MonthlyIncome ~ Education*JobLevel, data = HR_Data_Num)
+gvlmafit = gvlma(fit)
+gvlmafit
+
+## see normal histogram
+plotNormalHistogram(HR_Data_Num$MonthlyIncome, prob = TRUE)
+
+## data is not normal, use non parametric tests or transform data
+
+## conduct ANOVA
+res.aov <- aov(MonthlyIncome ~ Education*JobLevel, data = HR_Data_Num)
+summary(res.aov)
+
+```
+
+```{r ANOVA Test 2, message=FALSE, warning=FALSE, echo=TRUE}
+################################################################################
+############################## HR Data ANOVA ###################################
+################################################################################
+MI_GWLB_B_BT_F=c()
+MI_GWLB_G_BT_F=c()
+MI_GWLB_B_BT_NF=c()
+MI_GWLB_G_BT_NF=c()
+
+Att_GWLB_B_BT_F=c()
+Att_GWLB_G_BT_F=c()
+Att_GWLB_B_BT_NF=c()
+Att_GWLB_G_BT_NF=c()
+
+WorkLifeBalance_New=c()
+BusinessTravel_New=c()
+
+i=1
+
+for(value_1 in WB_Num){
+  if (value_1 == 1 | value_1 == 2){
+    if (BT_Num[i]==1){
+      MI_GWLB_B_BT_F=append(MI_GWLB_B_BT_F,MI_Num[i])
+      Att_GWLB_B_BT_F=append(Att_GWLB_B_BT_F,AT_Num[i])
+      WorkLifeBalance_New=append(WorkLifeBalance_New,0)
+      BusinessTravel_New=append(BusinessTravel_New,1)
+      i=i+1
+    }else{
+      MI_GWLB_B_BT_NF=append(MI_GWLB_B_BT_NF,MI_Num[i])
+      Att_GWLB_B_BT_NF=append(Att_GWLB_B_BT_NF,AT_Num[i])
+      WorkLifeBalance_New=append(WorkLifeBalance_New,0)
+      BusinessTravel_New=append(BusinessTravel_New,0)
+      i=i+1
+    }
+  }else{
+    if (BT_Num[i]==1){
+      MI_GWLB_G_BT_F=append(MI_GWLB_G_BT_F,MI_Num[i])
+      Att_GWLB_G_BT_F=append(Att_GWLB_G_BT_F,AT_Num[i])
+      WorkLifeBalance_New=append(WorkLifeBalance_New,1)
+      BusinessTravel_New=append(BusinessTravel_New,1)
+      i=i+1
+    }else{
+      MI_GWLB_G_BT_NF=append(MI_GWLB_B_BT_NF,MI_Num[i])
+      Att_GWLB_G_BT_NF=append(Att_GWLB_B_BT_NF,AT_Num[i])
+      WorkLifeBalance_New=append(WorkLifeBalance_New,1)
+      BusinessTravel_New=append(BusinessTravel_New,0)
+      i=i+1
+    }
+  }
+}
+MI_list=list(MI_GWLB_B_BT_F,MI_GWLB_G_BT_F,MI_GWLB_B_BT_NF,MI_GWLB_G_BT_NF)
+names(MI_list)=c("Bad_Balance_Freq_Business_Travel","Good_Balance_Freq_Business_Travel",
+                 "Bad_Balance_Non_Freq_Business_Travel","Good_Balance_Non_Freq_Business_Travel")
+boxplot(MI_list,las =1,cex.names=0.5, horizontal = F,cex.axis=0.37,
+        main="Monthly_Income",xlab="Group",ylim = c(0,20000),
+        ylab="Income",col=brewer.pal(12,"Set3"),border = "red")
+
+WorkLifeBalance_New_1=factor(WorkLifeBalance_New,levels = c(0,1),
+                             labels = c("Bad_Balance","Good_Balance"))
+BusinessTravel_New_1=factor(BusinessTravel_New,levels = c(0,1),
+                            labels = c("Non_Freq_BT","Freq_BT"))
+
+table(WorkLifeBalance_New_1,BusinessTravel_New_1)
+
+boxplot(MI_Num~WorkLifeBalance_New_1*BusinessTravel_New_1,las =1,cex.names=1, horizontal = F,
+        main="Monthly_Income",xlab="Group",ylab="MI",
+        ylim = c(),col=brewer.pal(12,"Set3"),border = "red")
+Set_1=paste(WorkLifeBalance_New_1,BusinessTravel_New_1,sep = "-")
+
+tapply(MI_Num,Set_1,mean)
+bartlett.test(MI_Num~Set_1)
+tapply(MI_Num,Set_1,shapiro.test)
+tapply(MI_Num,Set_1,length)
+
+AOV_1=aov(MI_Num~WorkLifeBalance_New_1*BusinessTravel_New_1)
+Anova(AOV_1,type=3)
+summary(AOV_1)
+
+interaction.plot(WorkLifeBalance_New_1,BusinessTravel_New_1,MI_Num)
+```
+
+```{r Regularization, message=FALSE, warning=FALSE, echo=TRUE}
+# LASSO regression to fit a glm model
+
+# Split the data into a train and test set(70/30 split)
+set.seed(123)
+trainIndex <- sample(x = nrow(HR_Data_Num), size = nrow(HR_Data_Num)* 0.7)
+train <- HR_Data_Num[trainIndex,]
+test <- HR_Data_Num[-trainIndex,]
+
+dim(train)
+dim(test)
+
+train_x <- model.matrix(Attrition ~., train)[,-1]
+test_x <- model.matrix(Attrition ~., test)[,-1]
+
+train_y <- train$Attrition
+test_y <- test$Attrition
+
+# Use the cv.glmnet function to estimate the lambda.min and lambda.1se values. 
+# Compare and discuss the values.
+
+# Find best values of lambda using cross-validation
+set.seed(123)
+cv.lasso <- cv.glmnet(train_x, train_y, family = "binomial", nfolds = 10)
+
+# Plot the results from the cv.glmnet function provide an interpretation.
+plot(cv.lasso)
+
+# Fit a LASSO regression model against the training set and report on the coefficients.
+# Fit models based on lambda
+
+## Fit the model on the training data using lambda.min
+l1model.min <- glmnet(train_x, train_y, family = "binomial", alpha = 1, lambda = cv.lasso$lambda.min)
+l1model.min$beta
+
+## Fit the model on the training data using lambda.1se
+l1model.1se <- glmnet(train_x, train_y, family = "binomial", alpha =1, lambda = cv.lasso$lambda.1se)
+l1model.1se$beta
+
+####
+assess.glmnet(l1model.min,          
+              newx = test_x,             
+              newy = test_y )    
+####
+assess.glmnet(l1model.1se,          
+              newx = test_x,             
+              newy = test_y )            
+
+###
+plot(roc.glmnet(l1model.1se,          
+                newx = test_x,             
+                newy = test_y ), 
+                type="l") 
+
+#######################################################
+########################################################
+## Fit a logistic regression model for the test set
+logit_test <- glm(Attrition ~ Age + Department + DistanceFromHome + EducationField + EnvironmentSatisfaction + JobInvolvement + JobLevel + JobRole + JobSatisfaction + MaritalStatus + MonthlyIncome + NumCompaniesWorked + OverTime + RelationshipSatisfaction+ StockOptionLevel+TrainingTimesLastYear + WorkLifeBalance + YearsInCurrentRole + YearsSinceLastPromotion, data=test, family='binomial')
+summary(logit_test)
+```
